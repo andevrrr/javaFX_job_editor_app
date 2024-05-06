@@ -1,128 +1,134 @@
 package com.example.firstweek;
 
 import javafx.application.Application;
-import javafx.geometry.HPos;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
-import javafx.geometry.Pos;
+import javafx.geometry.Orientation;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
-import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
-import javafx.stage.Stage;
-import javafx.scene.layout.GridPane;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.control.*;
+import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
+import javafx.stage.Stage;
 
 public class JobApplication extends Application {
 
-    private Job job;
+    private ObservableList<Job> jobList = FXCollections.observableArrayList();
+    private Job currentJob;
+    private TextField jobNameField;
+    private Spinner<Integer> startSpinner , endSpinner ;
     private Label durationLabel, decayLabel, gapLabel;
-    private Canvas timingCanvas;
+    private ToggleGroup intervalGroup;
+    private TableView<Note> notesTableView;
+    private Canvas timingCanvas; // for note duration, decay, and gap
+    private Slider durationSlider, decaySlider, gapSlider;
 
     @Override
     public void start(Stage primaryStage) {
-        job = new Job("Initial Job Name");
+        jobList.addAll(Job.generateSampleJobs());
 
-        Label nameLabel = new Label("Job Name:");
-        TextField nameField = new TextField();
+        BorderPane root = new BorderPane();
+        Scene scene = new Scene(root, 1000, 600);
+        SplitPane mainSplit = new SplitPane();
+        mainSplit.setOrientation(Orientation.HORIZONTAL);
+        root.setCenter(mainSplit);
 
-        Label startLabel = new Label("Start note:");
-        Spinner<Integer> startSpinner = new Spinner<>(0, 127, job.getFromNote());
-        startSpinner.setEditable(true); //Setting the spinner editable
-        startSpinner.setPrefSize(75, 25); //Setting the size
+        ListView<Job> jobListView = setupJobListView();
+        VBox jobEditor = setupJobEditor();
+        notesTableView = setupNotesTable();
 
-        Label endLabel = new Label("End note:");
-        Spinner<Integer> endSpinner = new Spinner<>(0, 127, job.getToNote());
-        endSpinner.setEditable(true);
-        endSpinner.setPrefSize(75, 25);
+        SplitPane rightSplit = new SplitPane();
+        rightSplit.setOrientation(Orientation.VERTICAL);
+        rightSplit.getItems().addAll(jobEditor, notesTableView);
+        rightSplit.setDividerPositions(0.5, 0.8);
 
-        Button updateButton = new Button("Update");
+        mainSplit.getItems().addAll(jobListView, rightSplit);
+        mainSplit.setDividerPositions(0.3);
 
-        //nameField.setOnAction(e -> updateJobName(nameField)); // Updates the job name on enter
+        primaryStage.setTitle("Job Editor");
+        primaryStage.setScene(scene);
+        primaryStage.show();
+    }
 
-        // Updates the job name on click
-        updateButton.setOnAction(e -> {
-            updateJobDetails(nameField, startSpinner, endSpinner);
+    private ListView<Job> setupJobListView() {
+        ListView<Job> listView = new ListView<>(jobList);
+        listView.getSelectionModel().selectedItemProperty().addListener((obs, oldSelection, newSelection) -> {
+            if (newSelection != null) {
+                currentJob = newSelection;
+                updateJobEditor();
+                updateNotesTable();
+                updateCanvas();
+            }
         });
+        return listView;
+    }
 
-        // Radio Buttons for Interval Selection
-        ToggleGroup intervalGroup = new ToggleGroup();
-
-        RadioButton rbOne = new RadioButton("1 Semitone");
-        rbOne.setUserData(Job.Interval.ONE);
-        rbOne.setToggleGroup(intervalGroup);
-
-        RadioButton rbThree = new RadioButton("3 Semitones");
-        rbThree.setUserData(Job.Interval.THREE);
-        rbThree.setToggleGroup(intervalGroup);
-
-        RadioButton rbSix = new RadioButton("6 Semitones");
-        rbSix.setUserData(Job.Interval.SIX);
-        rbSix.setToggleGroup(intervalGroup);
-
-        RadioButton rbTwelve = new RadioButton("12 Semitones");
-        rbTwelve.setUserData(Job.Interval.TWELVE);
-        rbTwelve.setToggleGroup(intervalGroup);
-
-        // Setting the default selected radio button based on the current job interval
-        switch (job.getInterval()) {
-            case ONE:
-                rbOne.setSelected(true);
-                break;
-            case THREE:
-                rbThree.setSelected(true);
-                break;
-            case SIX:
-                rbSix.setSelected(true);
-                break;
-            case TWELVE:
-                rbTwelve.setSelected(true);
-                break;
-        }
-
-        VBox radioBox = new VBox(10, rbOne, rbThree, rbSix, rbTwelve);
-        TitledPane intervalPane = new TitledPane("Select Interval", radioBox);
-        intervalPane.setCollapsible(false);
-
-        intervalGroup.selectedToggleProperty().addListener((observable, oldValue, newValue) -> {
-            if (newValue != null) {
-                Job.Interval selectedInterval = (Job.Interval) newValue.getUserData();
-                job.setInterval(selectedInterval);
-                System.out.println(job);
+    private VBox setupJobEditor() {
+        Label nameLabel = new Label("Job Name:");
+        jobNameField = new TextField();
+        jobNameField.textProperty().addListener((obs, oldVal, newVal) -> {
+            if (currentJob != null) {
+                currentJob.setName(newVal);
+                updateNotesTable();
             }
         });
 
-        GridPane gridPane = new GridPane();
-        gridPane.setPadding(new Insets(10));
-        gridPane.setVgap(5);
-        gridPane.setHgap(5);
-        gridPane.setAlignment(Pos.CENTER);
+        int fromNote = (currentJob != null) ? currentJob.getFromNote() : 40;
+        int toNote = (currentJob != null) ? currentJob.getToNote() : 80;
+        int noteDuration = (currentJob != null) ? currentJob.getNoteDuration() : 1000;
 
-        gridPane.add(nameLabel, 0, 0);
-        gridPane.add(nameField, 1, 0);
-        gridPane.add(startLabel, 0, 1);
-        gridPane.add(startSpinner, 1, 1);
-        gridPane.add(endLabel, 0, 2);
-        gridPane.add(endSpinner, 1, 2);
-        gridPane.add(updateButton, 0, 3, 2, 1);
-        GridPane.setHalignment(updateButton, HPos.CENTER);
-        gridPane.add(intervalPane, 0, 4, 2, 1);
+        Label startLabel = new Label("Start note:");
+        startSpinner = new Spinner<>(0, 127, fromNote);
+        startSpinner.setEditable(true);
+        startSpinner.setPrefSize(75, 25);
+        startSpinner.valueProperty().addListener((obs, oldValue, newValue) -> {
+            if (currentJob != null && newValue != null) {
+                currentJob.setFromNote(newValue);
+                updateNotesTable();
+            }
+        });
 
-        Slider durationSlider = setupSlider(100, 5000, job.getNoteDuration(), "Duration: %d ms");
-        Slider decaySlider = setupSlider(100, 4500, job.getNoteDecay(), "Decay: %d ms");
-        Slider gapSlider = setupSlider(100, 500, job.getNoteGap(), "Gap: %d ms");
+        Label endLabel = new Label("End note:");
+        endSpinner = new Spinner<>(0, 127, toNote);
+        endSpinner.setEditable(true);
+        endSpinner.setPrefSize(75, 25);
+        endSpinner.valueProperty().addListener((obs, oldValue, newValue) -> {
+            if (currentJob != null && newValue != null) {
+                currentJob.setToNote(newValue);
+                updateNotesTable();
+            }
+        });
+
+        durationSlider = setupSlider(100, 5000, noteDuration, "Duration: %d ms");
+        decaySlider = setupSlider(100, 4500, noteDuration, "Decay: %d ms");
+        gapSlider = setupSlider(100, 500, noteDuration, "Gap: %d ms");
+
+        intervalGroup = new ToggleGroup();
+        HBox intervalBox = new HBox(10);
+        intervalBox.getChildren().addAll(
+                createIntervalRadioButton("1 Semitone", Job.Interval.ONE),
+                createIntervalRadioButton("3 Semitones", Job.Interval.THREE),
+                createIntervalRadioButton("6 Semitones", Job.Interval.SIX),
+                createIntervalRadioButton("12 Semitones", Job.Interval.TWELVE)
+        );
 
         timingCanvas = new Canvas(300, 50);
         updateCanvas();
 
-        VBox layout = new VBox(10);
-        layout.setPadding(new Insets(10));
-        layout.getChildren().addAll(gridPane, durationSlider, durationLabel, decaySlider, decayLabel, gapSlider, gapLabel, timingCanvas);
-
-        Scene scene = new Scene(layout, 600, 600);
-        primaryStage.setTitle("Job Update Form");
-        primaryStage.setScene(scene);
-        primaryStage.show();
+        GridPane gridPane = new GridPane();
+        gridPane.setVgap(10);
+        gridPane.setHgap(10);
+        gridPane.addRow(0, nameLabel, jobNameField);
+        gridPane.addRow(1, startLabel, startSpinner);
+        gridPane.addRow(2, endLabel, endSpinner);
+        gridPane.add(intervalBox, 1, 3);
+        VBox editorBox = new VBox(10);
+        editorBox.setPadding(new Insets(20));
+        editorBox.getChildren().addAll(gridPane, durationSlider, decaySlider, gapSlider, timingCanvas);
+        return editorBox;
     }
 
     private Slider setupSlider(int min, int max, int initialValue, String labelTextFormat) {
@@ -144,11 +150,11 @@ public class JobApplication extends Application {
         slider.valueProperty().addListener((observable, oldValue, newValue) -> {
             label.setText(String.format(labelTextFormat, newValue.intValue()));
             if (labelTextFormat.contains("Duration")) {
-                job.setNoteDuration(newValue.intValue());
+                currentJob.setNoteDuration(newValue.intValue());
             } else if (labelTextFormat.contains("Decay")) {
-                job.setNoteDecay(newValue.intValue());
+                currentJob.setNoteDecay(newValue.intValue());
             } else if (labelTextFormat.contains("Gap")) {
-                job.setNoteGap(newValue.intValue());
+                currentJob.setNoteGap(newValue.intValue());
             }
             updateCanvas();
         });
@@ -156,13 +162,57 @@ public class JobApplication extends Application {
         return slider;
     }
 
+    private RadioButton createIntervalRadioButton(String text, Job.Interval interval) {
+        RadioButton radioButton = new RadioButton(text);
+        radioButton.setUserData(interval);
+        radioButton.setToggleGroup(intervalGroup);
+        radioButton.setOnAction(e -> {
+            if (currentJob != null) {
+                currentJob.setInterval(interval);
+                updateCanvas();
+                updateNotesTable();
+            }
+        });
+        return radioButton;
+    }
+
+    private TableView<Note> setupNotesTable() {
+        TableView<Note> tableView = new TableView<>();
+        TableColumn<Note, Integer> numberColumn = new TableColumn<>("Note");
+        numberColumn.setCellValueFactory(new PropertyValueFactory<>("number"));
+        TableColumn<Note, Integer> velocityColumn = new TableColumn<>("Velocity");
+        velocityColumn.setCellValueFactory(new PropertyValueFactory<>("velocity"));
+        TableColumn<Note, Integer> startTimeColumn = new TableColumn<>("Start (ms)");
+        startTimeColumn.setCellValueFactory(new PropertyValueFactory<>("startTime"));
+        TableColumn<Note, Integer> endTimeColumn = new TableColumn<>("End (ms)");
+        endTimeColumn.setCellValueFactory(new PropertyValueFactory<>("endTime"));
+        tableView.getColumns().addAll(numberColumn, velocityColumn, startTimeColumn, endTimeColumn);
+        return tableView;
+    }
+
+    private void updateJobEditor() {
+        if (currentJob == null) return;
+        jobNameField.setText(currentJob.getName());
+        startSpinner.getValueFactory().setValue(currentJob.getFromNote());
+        endSpinner .getValueFactory().setValue(currentJob.getToNote());
+        durationSlider.setValue(currentJob.getNoteDuration());
+        decaySlider.setValue(currentJob.getNoteDecay());
+        gapSlider.setValue(currentJob.getNoteGap());
+        intervalGroup.getToggles().forEach(toggle -> {
+            if (((Job.Interval)toggle.getUserData()) == currentJob.getInterval()) {
+                intervalGroup.selectToggle(toggle);
+            }
+        });
+    }
+
     private void updateCanvas() {
+        if (currentJob == null) return;
         GraphicsContext gc = timingCanvas.getGraphicsContext2D();
         double width = timingCanvas.getWidth();
-        double total = job.getNoteDuration() + job.getNoteDecay() + job.getNoteGap();
-        double durationWidth = width * job.getNoteDuration() / total;
-        double decayWidth = width * job.getNoteDecay() / total;
-        double gapWidth = width * job.getNoteGap() / total;
+        double total = currentJob.getNoteDuration() + currentJob.getNoteDecay() + currentJob.getNoteGap();
+        double durationWidth = width * currentJob.getNoteDuration() / total;
+        double decayWidth = width * currentJob.getNoteDecay() / total;
+        double gapWidth = width * currentJob.getNoteGap() / total;
 
         gc.clearRect(0, 0, width, timingCanvas.getHeight());
         gc.setFill(Color.GREEN);
@@ -173,34 +223,15 @@ public class JobApplication extends Application {
         gc.fillRect(durationWidth + decayWidth, 10, gapWidth, 30);
     }
 
-    private void updateJobDetails(TextField nameField, Spinner<Integer> startSpinner, Spinner<Integer> endSpinner) {
-        try {
-            // Updating the job name
-            String newName = nameField.getText().trim();
-            job.setName(newName);
-
-            // Updating the start and end notes
-            int startNote = startSpinner.getValue();
-            int endNote = endSpinner.getValue();
-
-            job.setFromNote(startNote);
-            job.setToNote(endNote);
-
-            System.out.println(job);
-        } catch (IllegalArgumentException e) {
-            System.out.println(e.getMessage());
+    private void updateNotesTable() {
+        if (currentJob == null) {
+            notesTableView.setItems(FXCollections.observableArrayList());  // Clear table if no job is selected
+        } else {
+            ObservableList<Note> notes = FXCollections.observableArrayList(currentJob.generateNotes());
+            notesTableView.setItems(notes);
         }
     }
 
-    private void updateJobName(TextField nameField) {
-        try {
-            String newName = nameField.getText().trim();
-            job.setName(newName);
-            System.out.println(job);
-        } catch (IllegalArgumentException e) {
-            System.out.println(e.getMessage());
-        }
-    }
 
     public static void main(String[] args) {
         launch(args);

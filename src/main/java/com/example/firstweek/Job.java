@@ -223,6 +223,38 @@ public class Job {
         );
     }
 
+    public static List<Job> generateSampleJobs() {
+        List<Job> jobs = new ArrayList<>();
+        jobs.add(new Job("Job 1"));
+        jobs.add(new Job("Job 2"));
+        return jobs;
+    }
+
+    public List<Note> generateNotes() {
+        List<Note> notes = new ArrayList<>();
+        int currentTime = 0;
+        int step = this.interval.getValue();
+
+        for (int noteValue = this.fromNote; noteValue <= this.toNote; noteValue += step) {
+            int noteDuration = calculateDuration(noteValue);
+            int velocity = calculateVelocity(noteValue);
+            int endTime = currentTime + noteDuration + this.noteDecay;
+
+            notes.add(new Note(noteValue, velocity, currentTime, endTime));
+            currentTime = endTime + this.noteGap;
+        }
+
+        return notes;
+    }
+
+    private int calculateDuration(int noteValue) {
+        return this.noteDuration + (noteValue - this.fromNote) / 12;
+    }
+
+    private int calculateVelocity(int noteValue) {
+        return Math.min(127, 70 + (noteValue - this.fromNote) / 2);
+    }
+
     //
     // Private fields
     //
